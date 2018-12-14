@@ -1,0 +1,4 @@
+**/*.exe
+**/*.zip
+**/*vlc*
+node_modules
