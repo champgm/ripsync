@@ -7,64 +7,73 @@ import decompress from 'decompress';
 import decompressTarxz from 'decompress-tarxz';
 import progress from 'request-progress';
 import unzipper from 'unzipper';
+import AdmZip from 'adm-zip';
+import inquirer from 'inquirer';
+import { spawn } from 'child_process';
 
 import { exec } from 'child-process-promise';
 import { promisify } from 'util';
 const execPromise = promisify(exec);
 
-doStuff().then(() => {
-  console.log('All done.');
+const ripperUrl = 'https://github.com/enzo1982/freac/releases/download/v1.0.32/freac-1.0.32-bin.zip';
+const ripperFileName = 'ripper.zip';
+const expectedSize = 6380756;
+const questions = [
+  {
+    type: 'input',
+    name: 'title',
+    message: 'Please enter title:',
+  },
+];
+
+inquirer.prompt(questions).then((answers) => {
+  const title = answers.title;
+  doStuff(title).then((newPath) => {
+    console.log(`All done. Your files should be in '${newPath}'`);
+  });
 });
 
-async function doStuff() {
-  // const vlcUrl = 'https://download.videolan.org/pub/videolan/vlc/3.0.4/win64/vlc-3.0.4-win64.zip';
-  const freeAcUrl = 'https://github.com/enzo1982/freac/releases/download/v1.0.32/freac-1.0.32-bin.zip';
-  // const vlcFile = 'vlc.exe';
-  // const vlcFile = 'vlc.zip';
-
-  // const expectedSize = 70270025;
-  const freeAcFile = 'freac-1.0.32-bin.zip';
-
-  console.log('Checking for VLC...');
-  let fileSizeInBytes;
-  try {
-    const stats = fs.statSync(vlcFile);
-    fileSizeInBytes = stats.size;
-  } catch (error) {
-    console.log("Couldn't find VLC file, will download.");
-  }
-  if (fileSizeInBytes !== expectedSize) {
-    console.log(`Existing VLC file is the wrong size,
-expected ${expectedSize},
- but got ${fileSizeInBytes},
-downloading again...`);
-    await getFile2(vlcUrl, vlcFile);
-  } else {
-    console.log('VLC file seems to be the right size already, no need to download.');
-  }
-
-  // await unzipFile(vlcFile, '.');
-
-  console.log('Unzipping...');
-  await execPromise(`unzip -o ${vlcFile} -d .`);
-
-  const asdf = await execPromise('getCdDriveLetter.bat');
-  console.log(`ADF: ${asdf}`);
+async function doStuff(title: string) {
+  await downloadRipper();
+  await unzipFile();
+  await rip(title);
+  const usbDriveLetter = await getUsbDriveLetter();
+  const newPath = await moveFolder(title, usbDriveLetter);
+  return newPath;
 }
 
-// async function untarFile(tarFile, destination) {
-//   await decompress(tarFile, '.', {
-//     plugins: [decompressTarxz()],
-//   });
-// }
+async function moveFolder(title: string, usbDriveLetter: string) {
+  const oldPath = `./${title}`;
+  const newPath = `${usbDriveLetter}/${title}`;
+  await fs.renameSync(oldPath, newPath);
+  return newPath;
+}
 
-function getFile2(vlcUrl, fileName) {
+async function downloadRipper() {
+  console.log('Checking for ripper...');
+  let fileSizeInBytes;
+  try {
+    const stats = fs.statSync(ripperFileName);
+    fileSizeInBytes = stats.size;
+  } catch (error) {
+    fileSizeInBytes = 0;
+  }
+  if (fileSizeInBytes !== expectedSize) {
+    console.log('  Existing ripper file is the wrong size.');
+    console.log(`  Expected: ${expectedSize},`);
+    console.log(`  Actual  : ${fileSizeInBytes},`);
+    console.log('  Downloading ripper...');
+    await getFile();
+  } else {
+    console.log('  Ripper file present.');
+  }
+}
+
+function getFile() {
   return new Promise(async (resolve, reject) => {
-    progress(request(vlcUrl))
-      .on('progress', (state) => {
-        console.log(`%${Math.trunc(state.percent * 100)}`);
-      })
+    progress(request(ripperUrl))
       .on('error', (error) => {
+        console.log('Error ocurred');
         console.log(error.message);
         console.log(`${error.stack}`);
         reject();
@@ -72,32 +81,48 @@ function getFile2(vlcUrl, fileName) {
       .on('end', () => {
         resolve();
       })
-      .pipe(fs.createWriteStream(fileName));
+      .pipe(fs.createWriteStream(ripperFileName));
   });
 }
 
-async function unzipFile(zipFile, destination) {
-  console.log('Unzipping VLC file...');
-  const stream = fs.createReadStream(zipFile).pipe(unzipper.Extract({ path: destination }));
-  // await makePromiseStream(stream);
-
-  console.log('Extracted.');
-}
-
-function getFile(vlcUrl, fileName): Promise<any> {
-  console.log('Downloading VLC...');
-  const stream = request(vlcUrl).pipe(fs.createWriteStream(fileName));
-  return makePromiseStream(stream);
-}
-
-function makePromiseStream(stream) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      stream.on('close', () => {
-        resolve();
-      });
-    } catch (error) {
-      reject(error);
+async function getUsbDriveLetter() {
+  const driveEntry: string = await execPromise('wmic logicaldisk get caption,volumename');
+  const driveEntries = driveEntry.split('\n');
+  for (const entry of driveEntries) {
+    if (entry.includes('AUDIOBOOKS')) {
+      return entry.substr(0, 2);
     }
+  }
+  return;
+}
+
+async function rip(title: string): Promise<any> {
+  // await execPromise(`freaccmd.exe -q 0 -d ${title} -cd 0 -track all -cddb`);
+  return new Promise((resolve, reject) => {
+    const exe = 'freac-1.0.32-bin\\freaccmd.exe';
+    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb'];
+
+    let error = false;
+    const ripCommand = spawn(exe, options);
+    ripCommand.stdout.on('data', (data) => {
+      console.log(data.toString());
+    });
+    ripCommand.stderr.on('data', (data) => {
+      console.log(data.toString());
+      error = true;
+    });
+    ripCommand.on('exit', (code) => {
+      console.log(code.toString());
+      if (error) {
+        reject();
+      } else {
+        resolve();
+      }
+    });
   });
+}
+
+async function unzipFile() {
+  const zip = new AdmZip(`./${ripperFileName}`);
+  zip.extractAllTo('./', true);
 }
