@@ -1,5 +1,5 @@
 import http from 'http';
-import fs from 'fs';
+import fs from 'fs-extra';
 import request from 'request';
 import { resolve } from 'dns';
 import tar from 'tar-fs';
@@ -28,8 +28,8 @@ const questions = [
 
 inquirer.prompt(questions).then((answers) => {
   const title = answers.title;
-  doStuff(title).then((newPath) => {
-    console.log(`All done. Your files should be in '${newPath}'`);
+  doStuff(title).then(() => {
+    console.log('');
   });
 });
 
@@ -38,18 +38,37 @@ async function doStuff(title: string) {
   await unzipFile();
   await rip(title);
   const usbDriveLetter = await getUsbDriveLetter();
-  const newPath = await moveFolder(title, usbDriveLetter);
-  return newPath;
+  if (usbDriveLetter) {
+    const newPath = await moveFolder(title, usbDriveLetter);
+    console.log(`All done. Your files should now be in '${newPath}'`);
+  } else {
+    console.log("No USB drive with the name 'AUDIOBOOKS' was found.");
+    console.log('Please insert one.');
+  }
 }
 
+// async function moveFolder(title: string, usbDriveLetter: string) {
+//   console.log('');
+//   process.stdout.write('Moving files to USB drive...');
+//   const oldPath = `./${title}`;
+//   const newPath = `${usbDriveLetter}/${title}`;
+//   await fs.renameSync(oldPath, newPath);
+//   console.log(' Done.');
+//   return newPath;
+// }
+
 async function moveFolder(title: string, usbDriveLetter: string) {
+  console.log('');
+  process.stdout.write('Moving files to USB drive...');
   const oldPath = `./${title}`;
   const newPath = `${usbDriveLetter}/${title}`;
-  await fs.renameSync(oldPath, newPath);
+  await fs.moveSync(oldPath, newPath);
+  console.log(' Done.');
   return newPath;
 }
 
 async function downloadRipper() {
+  console.log('');
   console.log('Checking for ripper...');
   let fileSizeInBytes;
   try {
@@ -62,18 +81,21 @@ async function downloadRipper() {
     console.log('  Existing ripper file is the wrong size.');
     console.log(`  Expected: ${expectedSize},`);
     console.log(`  Actual  : ${fileSizeInBytes},`);
-    console.log('  Downloading ripper...');
+    process.stdout.write('  Downloading ripper...');
+    console.log(' Done.');
     await getFile();
   } else {
     console.log('  Ripper file present.');
   }
+  console.log('');
 }
 
 function getFile() {
   return new Promise(async (resolve, reject) => {
     progress(request(ripperUrl))
       .on('error', (error) => {
-        console.log('Error ocurred');
+        console.log('');
+        console.log('Error ocurred:');
         console.log(error.message);
         console.log(`${error.stack}`);
         reject();
@@ -100,7 +122,9 @@ async function rip(title: string): Promise<any> {
   // await execPromise(`freaccmd.exe -q 0 -d ${title} -cd 0 -track all -cddb`);
   return new Promise((resolve, reject) => {
     const exe = 'freac-1.0.32-bin\\freaccmd.exe';
-    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb'];
+    // const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb'];
+
+    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', '1', '-cddb'];
 
     let error = false;
     const ripCommand = spawn(exe, options);
