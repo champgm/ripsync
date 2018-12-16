@@ -6,6 +6,7 @@ import inquirer from 'inquirer';
 import { spawn } from 'child_process';
 import { exec } from 'child-process-promise';
 import { promisify } from 'util';
+import isValidFilename from 'valid-filename';
 const execPromise = promisify(exec);
 
 const ripperUrl = 'https://github.com/enzo1982/freac/releases/download/v1.0.32/freac-1.0.32-bin.zip';
@@ -16,9 +17,17 @@ const questions = [
     type: 'input',
     name: 'title',
     message: 'Please enter the title:',
+    validate: (title) => {
+      const isValid = isValidFilename(title);
+      if (isValid) {
+        return true;
+      }
+      return `The title, '${title}' would result in invalid file name(s)\nPlease specify something different.`;
+    },
   },
 ];
 
+console.log('');
 inquirer.prompt(questions).then((answers) => {
   const title = answers.title;
   ripSync(title).then(() => {
@@ -65,8 +74,8 @@ async function downloadRipper() {
     console.log(`  Expected: ${expectedSize},`);
     console.log(`  Actual  : ${fileSizeInBytes},`);
     process.stdout.write('  Downloading ripper...');
-    console.log(' Done.');
     await getFile();
+    console.log(' Done.');
   } else {
     console.log('  Ripper file present.');
   }
@@ -110,18 +119,18 @@ async function rip(title: string): Promise<any> {
     let error = false;
     const ripCommand = spawn(exe, options);
     ripCommand.stdout.on('data', (data) => {
-      console.log(data.toString());
+      console.log(`  ${data.toString()}`);
     });
     ripCommand.stderr.on('data', (data) => {
-      console.log(data.toString());
+      console.log(`  ${data.toString()}`);
       error = true;
     });
     ripCommand.on('exit', (code) => {
-      console.log(code.toString());
       if (error) {
+        console.log('  Failed.');
         reject();
       } else {
-        console.log('Done.');
+        console.log('  Done.');
         resolve();
       }
     });
