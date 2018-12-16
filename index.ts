@@ -1,16 +1,9 @@
-import http from 'http';
 import fs from 'fs-extra';
 import request from 'request';
-import { resolve } from 'dns';
-import tar from 'tar-fs';
-import decompress from 'decompress';
-import decompressTarxz from 'decompress-tarxz';
 import progress from 'request-progress';
-import unzipper from 'unzipper';
 import AdmZip from 'adm-zip';
 import inquirer from 'inquirer';
 import { spawn } from 'child_process';
-
 import { exec } from 'child-process-promise';
 import { promisify } from 'util';
 const execPromise = promisify(exec);
@@ -22,18 +15,18 @@ const questions = [
   {
     type: 'input',
     name: 'title',
-    message: 'Please enter title:',
+    message: 'Please enter the title:',
   },
 ];
 
 inquirer.prompt(questions).then((answers) => {
   const title = answers.title;
-  doStuff(title).then(() => {
+  ripSync(title).then(() => {
     console.log('');
   });
 });
 
-async function doStuff(title: string) {
+async function ripSync(title: string) {
   await downloadRipper();
   await unzipFile();
   await rip(title);
@@ -47,22 +40,12 @@ async function doStuff(title: string) {
   }
 }
 
-// async function moveFolder(title: string, usbDriveLetter: string) {
-//   console.log('');
-//   process.stdout.write('Moving files to USB drive...');
-//   const oldPath = `./${title}`;
-//   const newPath = `${usbDriveLetter}/${title}`;
-//   await fs.renameSync(oldPath, newPath);
-//   console.log(' Done.');
-//   return newPath;
-// }
-
 async function moveFolder(title: string, usbDriveLetter: string) {
   console.log('');
   process.stdout.write('Moving files to USB drive...');
   const oldPath = `./${title}`;
   const newPath = `${usbDriveLetter}/${title}`;
-  await fs.moveSync(oldPath, newPath);
+  await fs.move(oldPath, newPath, { overwrite: true });
   console.log(' Done.');
   return newPath;
 }
@@ -87,10 +70,9 @@ async function downloadRipper() {
   } else {
     console.log('  Ripper file present.');
   }
-  console.log('');
 }
 
-function getFile() {
+async function getFile() {
   return new Promise(async (resolve, reject) => {
     progress(request(ripperUrl))
       .on('error', (error) => {
@@ -119,12 +101,11 @@ async function getUsbDriveLetter() {
 }
 
 async function rip(title: string): Promise<any> {
-  // await execPromise(`freaccmd.exe -q 0 -d ${title} -cd 0 -track all -cddb`);
+  console.log('');
+  console.log('Ripping...');
   return new Promise((resolve, reject) => {
     const exe = 'freac-1.0.32-bin\\freaccmd.exe';
-    // const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb'];
-
-    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', '1', '-cddb'];
+    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb', '-p', 'Track<track>'];
 
     let error = false;
     const ripCommand = spawn(exe, options);
@@ -140,6 +121,7 @@ async function rip(title: string): Promise<any> {
       if (error) {
         reject();
       } else {
+        console.log('Done.');
         resolve();
       }
     });
@@ -147,6 +129,9 @@ async function rip(title: string): Promise<any> {
 }
 
 async function unzipFile() {
+  console.log('');
+  process.stdout.write('Unzipping ripper...');
   const zip = new AdmZip(`./${ripperFileName}`);
   zip.extractAllTo('./', true);
+  console.log(' Done.');
 }

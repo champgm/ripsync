@@ -1,1 +1,0 @@
-freaccmd.exe -q 0 -d test -cd 0 -track all -cddb
