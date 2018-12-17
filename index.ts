@@ -114,7 +114,7 @@ async function rip(title: string): Promise<any> {
   console.log('Ripping...');
   return new Promise((resolve, reject) => {
     const exe = 'freac-1.0.32-bin\\freaccmd.exe';
-    const options = ['-q', '0', '-d', title, '-cd', '0', '-track', 'all', '-cddb', '-p', 'Track<track>'];
+    const options = ['-q', '0', '-t', '300', '-d', title, '-cd', '0', '-track', 'all', '-cddb', '-p', 'Track<track>'];
 
     let error = false;
     const ripCommand = spawn(exe, options);
