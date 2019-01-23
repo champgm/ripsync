@@ -44,8 +44,7 @@ async function ripSync(title: string) {
     const newPath = await moveFolder(title, usbDriveLetter);
     console.log(`All done. Your files should now be in '${newPath}'`);
   } else {
-    console.log("No USB drive with the name 'AUDIOBOOKS' was found.");
-    console.log('Please insert one.');
+    console.log("No USB drive with the name 'AUDIOBOOKS' was found. Will not move files");
   }
 }
 
